@@ -1,0 +1,220 @@
+-- JapaHub v1.0
+-- Script via chat apenas, sem GUI
+-- Prefixo /
+-- Lista de permissão por Username
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local LocalPlayer = Players.LocalPlayer
+
+-- ===== CONFIGURAÇÕES =====
+local PREFIX = "/"
+
+-- Lista de usernames com permissão OP
+local Owners = {
+    "SeuUsername1",
+    "SeuUsername2",
+}
+
+-- Mensagem de boas-vindas
+LocalPlayer:WaitForChild("PlayerGui")
+local function notify(text)
+    game:GetService("StarterGui"):SetCore("SendNotification", {
+        Title = "JapaHub 🎩";
+        Text = text;
+        Duration = 4;
+    })
+end
+
+notify("Bem-vindo ao JapaHub 🎩")
+
+-- ===== FUNÇÕES UTILS =====
+local function findPlayerByName(name)
+    name = name:lower()
+    if name == "me" then return {LocalPlayer} end
+    local matches = {}
+    for _, plr in pairs(Players:GetPlayers()) do
+        if plr.Name:lower():find(name) then
+            table.insert(matches, plr)
+        end
+    end
+    return matches
+end
+
+local function isOwner(plr)
+    for _, username in pairs(Owners) do
+        if plr.Name == username then
+            return true
+        end
+    end
+    return false
+end
+
+-- ===== COMANDOS =====
+local Commands = {}
+
+-- KICK
+Commands["kick"] = function(args, sender)
+    if not isOwner(sender) then notify("Sem permissão!") return end
+    local targets = findPlayerByName(args[1] or "")
+    for _, plr in pairs(targets) do
+        plr:Kick("Kicked by JapaHub")
+    end
+end
+
+-- KILL
+Commands["kill"] = function(args, sender)
+    local targets = findPlayerByName(args[1] or "")
+    for _, plr in pairs(targets) do
+        if plr.Character and plr.Character:FindFirstChild("Humanoid") then
+            plr.Character.Humanoid.Health = 0
+        end
+    end
+end
+
+-- BRING
+Commands["bring"] = function(args, sender)
+    if not isOwner(sender) then notify("Sem permissão!") return end
+    local targets = findPlayerByName(args[1] or "")
+    for _, plr in pairs(targets) do
+        if plr.Character and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            plr.Character:SetPrimaryPartCFrame(LocalPlayer.Character.HumanoidRootPart.CFrame + Vector3.new(0,5,0))
+        end
+    end
+end
+
+-- GOTO
+Commands["goto"] = function(args, sender)
+    local targets = findPlayerByName(args[1] or "")
+    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        for _, plr in pairs(targets) do
+            if plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+                LocalPlayer.Character.HumanoidRootPart.CFrame = plr.Character.HumanoidRootPart.CFrame + Vector3.new(0,5,0)
+            end
+        end
+    end
+end
+
+-- FLY
+local flying = false
+local flySpeed = 50
+Commands["fly"] = function(args, sender)
+    if not isOwner(sender) then notify("Sem permissão!") return end
+    flying = not flying
+    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid")
+    if flying and hrp and hum then
+        hum.PlatformStand = true
+        local bodyVelocity = Instance.new("BodyVelocity")
+        bodyVelocity.MaxForce = Vector3.new(1e5,1e5,1e5)
+        bodyVelocity.Velocity = Vector3.new(0,0,0)
+        bodyVelocity.Name = "FlyVelocity"
+        bodyVelocity.Parent = hrp
+
+        RunService.RenderStepped:Connect(function()
+            if flying and hrp:FindFirstChild("FlyVelocity") then
+                local camCF = workspace.CurrentCamera.CFrame
+                local direction = Vector3.new()
+                local uis = game:GetService("UserInputService")
+                if uis:IsKeyDown(Enum.KeyCode.W) then direction = direction + camCF.LookVector end
+                if uis:IsKeyDown(Enum.KeyCode.S) then direction = direction - camCF.LookVector end
+                if uis:IsKeyDown(Enum.KeyCode.A) then direction = direction - camCF.RightVector end
+                if uis:IsKeyDown(Enum.KeyCode.D) then direction = direction + camCF.RightVector end
+                direction = direction.Unit * flySpeed
+                if direction ~= direction then direction = Vector3.new() end -- evita NaN
+                hrp.FlyVelocity.Velocity = direction
+            end
+        end)
+    else
+        if hrp and hrp:FindFirstChild("FlyVelocity") then hrp.FlyVelocity:Destroy() end
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+            LocalPlayer.Character.Humanoid.PlatformStand = false
+        end
+    end
+    notify(flying and "Fly ativado!" or "Fly desativado!")
+end
+
+-- GOD
+Commands["god"] = function(args, sender)
+    local targets = findPlayerByName(args[1] or "")
+    for _, plr in pairs(targets) do
+        local hum = plr.Character and plr.Character:FindFirstChild("Humanoid")
+        if hum then
+            hum.MaxHealth = math.huge
+            hum.Health = math.huge
+        end
+    end
+    notify("Modo GOD aplicado!")
+end
+
+-- SPEED
+Commands["speed"] = function(args, sender)
+    local targets = findPlayerByName(args[1] or "")
+    local speed = tonumber(args[2]) or 16
+    for _, plr in pairs(targets) do
+        local hum = plr.Character and plr.Character:FindFirstChild("Humanoid")
+        if hum then hum.WalkSpeed = speed end
+    end
+    notify("Speed aplicada: "..speed)
+end
+
+-- Nuke (apenas Owners)
+Commands["nuke"] = function(args, sender)
+    if not isOwner(sender) then notify("Sem permissão!") return end
+    local pos = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character.HumanoidRootPart.Position
+    if pos then
+        for _, obj in pairs(workspace:GetDescendants()) do
+            if obj:IsA("BasePart") and (obj.Position - pos).Magnitude <= 50 then
+                obj:Destroy()
+            end
+        end
+    end
+    notify("Nuke executado!")
+end
+
+-- Rasengan (exemplo visual divertido)
+Commands["rasengan"] = function(args, sender)
+    local targets = findPlayerByName(args[1] or "")
+    for _, plr in pairs(targets) do
+        if plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+            local part = Instance.new("Part", workspace)
+            part.Size = Vector3.new(3,3,3)
+            part.Shape = Enum.PartType.Ball
+            part.Anchored = true
+            part.CanCollide = false
+            part.Position = plr.Character.HumanoidRootPart.Position + Vector3.new(0,5,0)
+            part.BrickColor = BrickColor.new("Bright blue")
+            game:GetService("Debris"):AddItem(part,3)
+        end
+    end
+    notify("Rasengan lançado!")
+end
+
+-- CMD HANDLER
+Players.PlayerAdded:Connect(function(plr)
+    plr.Chatted:Connect(function(msg)
+        if msg:sub(1,#PREFIX) == PREFIX then
+            local args = msg:sub(#PREFIX+1):split(" ")
+            local cmd = table.remove(args,1):lower()
+            if Commands[cmd] then
+                Commands[cmd](args, plr)
+            else
+                notify("Comando não encontrado!")
+            end
+        end
+    end)
+end)
+
+-- LocalPlayer chat
+LocalPlayer.Chatted:Connect(function(msg)
+    if msg:sub(1,#PREFIX) == PREFIX then
+        local args = msg:sub(#PREFIX+1):split(" ")
+        local cmd = table.remove(args,1):lower()
+        if Commands[cmd] then
+            Commands[cmd](args, LocalPlayer)
+        else
+            notify("Comando não encontrado!")
+        end
+    end
+end)
